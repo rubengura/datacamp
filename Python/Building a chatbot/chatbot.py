@@ -7,6 +7,7 @@ import numpy as np
 bot_template = "BOT : {0}"
 user_template = "USER : {0}"
 
+
 # Define respond()
 def respond(message):
     # Call match_rule
@@ -18,6 +19,7 @@ def respond(message):
         response = response.format(phrase)
     return response
 
+
 # Define a function that sends a message to the bot: send_message
 def send_message(message):
     # Print user_template including the user_message
@@ -26,6 +28,7 @@ def send_message(message):
     response = respond(message)
     # Print the bot template including the bot's response.
     print(bot_template.format(response))
+
 
 # Define match_rule()
 def match_rule(rules, message):
@@ -43,6 +46,7 @@ def match_rule(rules, message):
     # Return the response and phrase
     return response, phrase
 
+
 rules = {'I want (.*)': ['What would it mean if you got {0}',
   'Why do you want {0}',
   "What's stopping you from getting {0}"],
@@ -55,6 +59,7 @@ rules = {'I want (.*)': ['What would it mean if you got {0}',
   'Do you wish that {0}',
   'What do you think about {0}',
   'Really--if {0}']}
+
 
 # Define replace_pronouns()
 def replace_pronouns(message):
@@ -74,6 +79,7 @@ def replace_pronouns(message):
         return re.sub('you','me', message)
 
     return message
+
 
 # Send a message to the bot
 send_message("hello")
@@ -153,6 +159,7 @@ for intent, keys in keywords.items():
 # Print the patterns
 print(patterns)
 
+
 # Define a function to find the intent of a message
 def match_intent(message):
     matched_intent = None
@@ -161,6 +168,7 @@ def match_intent(message):
         if pattern.search(message):
             matched_intent = intent
     return matched_intent
+
 
 # Define a respond function
 def respond(message):
@@ -172,6 +180,7 @@ def respond(message):
         key = intent
     return responses[key]
 
+
 responses = {'default': 'default message',
  'goodbye': 'goodbye for now',
  'greet': 'Hello you! :)',
@@ -181,6 +190,7 @@ responses = {'default': 'default message',
 send_message("hello!")
 send_message("bye byeee")
 send_message("thanks very much!")
+
 
 # Define find_name()
 def find_name(message):
@@ -196,6 +206,7 @@ def find_name(message):
             # Return the name if the keywords are present
             name = ' '.join(name_words)
     return name
+
 
 # Define respond()
 def respond(message):
