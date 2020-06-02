@@ -25,3 +25,15 @@ less seasonal/spring.csv seasonal/summer.csv
 # Viewing the start of a file
 head seasonal/summer.csv
 head -n 3 seasonal/summer.csv
+
+# Listing everything below a directory
+ls -R  # recursive
+ls -F  # prints "/" after each directory
+
+# Getting help for a command
+man head  # Displays manual of head function
+
+# Selecting columns from a file
+# -f: fields
+# -d delimiter
+cut -f 2-5,8 -d , values.csv  # Displays columns 2 to 5 and 8 from values.csv separated by ,
