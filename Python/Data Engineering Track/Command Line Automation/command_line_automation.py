@@ -17,3 +17,11 @@ ls -l | awk '{ SUM +=$5} END {print SUM}'
 
 # Pipe multiple outputs using Pipe operators
 ls -l | grep .py | awk '{ SUM +=$5} END {print SUM}'
+
+# Magic function %%bash
+%%bash --out output
+ls -l | awk '{ SUM +=$5} END {print SUM}'
+
+%%bash --out output --err error
+ls -l | awk '{ SUM +=$5} END {print SUM}'
+echo "no error so far" >&2
