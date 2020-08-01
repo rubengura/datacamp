@@ -27,6 +27,7 @@ FROM Incidents
 WHERE IncidentState IS NULL;
 
 -- Replace missing values
+-- COALESCE returns the first non NULL value of the variables inside the parenthesis
 SELECT Country, COALESCE(Country, IncidentState, City) AS Location
 FROM Incidents
 WHERE Country IS NULL;
@@ -51,3 +52,84 @@ SELECT DurationSeconds,
        ELSE 5
        END AS SecondGroup
 FROM Incidents;
+
+-- Write a query that returns an aggregation
+SELECT MixDesc, SUM(Quantity) AS Total
+FROM Shipments
+-- Group by the relevant column
+GROUP BY MixDesc;
+
+-- Count the number of rows by MixDesc
+SELECT MixDesc, COUNT(*)
+FROM Shipments
+GROUP BY MixDesc;
+
+-- Return the difference in OrderDate and ShipDate
+SELECT OrderDate, ShipDate,
+       DATEDIFF(DD, OrderDate, ShipDate) AS Duration
+FROM Shipments;
+
+-- Return the DeliveryDate as 5 days after the ShipDate
+SELECT OrderDate,
+       DATEADD(DD, 5, ShipDate) AS DeliveryDate
+FROM Shipments;
+
+-- Round Cost to the nearest dollar
+SELECT Cost,
+       ROUND(Cost, 0) AS RoundedCost
+FROM Shipments;
+
+-- Truncate cost to whole number
+SELECT Cost,
+       ROUND(Cost, 0, 1) AS TruncateCost
+FROM Shipments;
+
+-- Return the absolute value of DeliveryWeight
+SELECT DeliveryWeight,
+       ABS(DeliveryWeight) AS AbsoluteValue
+FROM Shipments;
+
+-- Return the square and square root of WeightValue
+SELECT WeightValue,
+       SQUARE(WeightValue) AS WeightSquare,
+       SQRT(WeightValue) AS WeightSqrt
+FROM Shipments;
+
+-- Declare the variable (a SQL Command, the var name, the datatype)
+DECLARE @counter INT
+
+-- Set the counter to 20
+SET @counter = 20
+
+-- Select and increment the counter by one
+SET @counter = @counter +1
+
+-- Print the variable
+SELECT @counter;
+
+
+
+DECLARE @counter INT
+SET @counter = 20
+
+-- Create a loop
+WHILE @counter < 30
+
+-- Loop code starting point
+BEGIN
+	SELECT @counter = @counter + 1
+-- Loop finish
+END
+
+-- Check the value of the variable
+SELECT @counter;
+
+-- Derived tables
+SELECT a.RecordId, a.Age, a.BloodGlucoseRandom,
+-- Select maximum glucose value (use colname from derived table)
+       b.MaxGlucose
+FROM Kidney a
+-- Join to derived table
+JOIN (SELECT Age, MAX(BloodGlucoseRandom) AS MaxGlucose FROM Kidney GROUP BY Age) b
+-- Join on Age
+ON a.Age = b.Age;
