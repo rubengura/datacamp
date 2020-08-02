@@ -133,3 +133,118 @@ FROM Kidney a
 JOIN (SELECT Age, MAX(BloodGlucoseRandom) AS MaxGlucose FROM Kidney GROUP BY Age) b
 -- Join on Age
 ON a.Age = b.Age;
+
+SELECT *
+FROM Kidney a
+-- Create derived table: select age, max blood pressure from kidney grouped by age
+JOIN (SELECT Age, MAX(BloodPressure) AS MaxBloodPressure
+      FROM Kidney
+      GROUP BY Age) b
+-- JOIN on BloodPressure equal to MaxBloodPressure
+ON a.BloodPressure = b.MaxBloodPressure
+-- Join on Age
+AND a.Age = b.Age;
+
+
+-- CTEs
+-- Specify the keyowrds to create the CTE
+WITH BloodGlucoseRandom (MaxGlucose)
+AS (SELECT MAX(BloodGlucoseRandom) AS MaxGlucose FROM Kidney)
+
+SELECT a.Age, b.MaxGlucose
+FROM Kidney a
+-- Join the CTE on blood glucose equal to max blood glucose
+JOIN BloodGlucoseRandom b
+ON b.MaxGlucose = a.BloodGlucoseRandom;
+
+-- Create the CTE
+WITH BloodPressure(MaxBloodPressure)
+AS (SELECT MAX(BloodPressure) AS MaxBloodPressure FROM Kidney)
+
+SELECT *
+FROM Kidney a
+-- Join the CTE
+JOIN BloodPressure b
+ON b.MaxBloodPressure = a.BloodPressure;
+
+
+-- Window Functions
+SELECT OrderID, TerritoryName,
+       -- Total price for each partition
+       SUM(OrderPrice)
+       -- Create the window and partitions
+       OVER(PARTITION BY TerritoryName) AS TotalPrice
+FROM Orders;
+
+SELECT OrderID, TerritoryName,
+       -- Number of rows per partition
+       COUNT(*)
+       -- Create the window and partitions
+       OVER(PARTITION BY TerritoryName) AS TotalOrders
+FROM Orders;
+
+SELECT TerritoryName, OrderDate,
+       -- Select the first value in each partition
+       FIRST_VALUE(OrderDate)
+       -- Create the partitions and arrange the rows
+       OVER(PARTITION BY TerritoryName ORDER BY OrderDate) AS FirstOrder
+FROM Orders;
+
+SELECT TerritoryName, OrderDate,
+       -- Specify the previous OrderDate in the window
+       LAG(OrderDate)
+       -- Over the window, partition by territory & order by order date
+       OVER(PARTITION BY TerritoryName ORDER BY OrderDate) AS PreviousOrder,
+       -- Specify the next OrderDate in the window
+       LEAD(OrderDate)
+       -- Create the partitions and arrange the rows
+       OVER(PARTITION BY TerritoryName ORDER BY OrderDate) AS NextOrder
+FROM Orders;
+
+
+SELECT TerritoryName, OrderDate,
+       -- Create a running total
+       SUM(OrderPrice)
+       -- Create the partitions and arrange the rows
+       OVER(PARTITION BY TerritoryName ORDER BY OrderDate) AS TerritoryTotal
+FROM Orders;
+
+SELECT TerritoryName, OrderDate,
+       -- Assign a row number
+       ROW_NUMBER()
+       -- Create the partitions and arrange the rows
+       OVER(PARTITION BY TerritoryName ORDER BY OrderDate) AS OrderCount
+FROM Orders;
+
+SELECT OrderDate, TerritoryName,
+       -- Calculate the standard deviation
+	   STDEV(OrderPrice)
+       OVER(PARTITION BY TerritoryName ORDER BY OrderDate) AS StdDevPrice
+FROM Orders;
+
+-- Create a CTE Called ModePrice which contains two columns
+WITH ModePrice (OrderPrice, UnitPriceFrequency)
+AS
+(
+	SELECT OrderPrice,
+	ROW_NUMBER()
+	OVER(PARTITION BY OrderPrice ORDER BY OrderPrice) AS UnitPriceFrequency
+	FROM Orders
+)
+-- Select everything from the CTE
+SELECT * FROM ModePrice;
+
+-- CTE from the previous exercise
+WITH ModePrice (OrderPrice, UnitPriceFrequency)
+AS
+(
+	SELECT OrderPrice,
+	ROW_NUMBER()
+    OVER (PARTITION BY OrderPrice ORDER BY OrderPrice) AS UnitPriceFrequency
+	FROM Orders
+)
+-- Select the order price from the CTE
+SELECT OrderPrice AS ModeOrderPrice
+FROM ModePrice
+-- Select the maximum UnitPriceFrequency from the CTE
+WHERE UnitPriceFrequency IN (SELECT MAX(UnitPriceFrequency) FROM ModePrice);
