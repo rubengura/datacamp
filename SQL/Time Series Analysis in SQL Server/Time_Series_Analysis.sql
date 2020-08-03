@@ -849,3 +849,252 @@ ORDER BY
 --2020	4	null	null	312
 --2020	5	null	null	309
 --2020	6	null	null	308
+
+
+
+-- Window Functions
+SELECT
+	ir.IncidentDate,
+	ir.NumberOfIncidents,
+    -- Fill in each window function and ordering
+    -- Note that all of these are in descending order!
+	ROW_NUMBER() OVER (ORDER BY ir.NumberOfIncidents DESC) AS rownum,
+	RANK() OVER (ORDER BY ir.NumberOfIncidents DESC) AS rk,
+	DENSE_RANK() OVER (ORDER BY ir.NumberOfIncidents DESC) AS dr
+FROM dbo.IncidentRollup ir
+WHERE
+	ir.IncidentTypeID = 3
+	AND ir.NumberOfIncidents >= 8
+ORDER BY
+	ir.NumberOfIncidents DESC;
+
+
+
+SELECT
+	ir.IncidentDate,
+	ir.NumberOfIncidents,
+    -- Fill in the correct aggregate functions
+    -- You do not need to fill in the OVER clause
+	SUM(ir.NumberOfIncidents) OVER () AS SumOfIncidents,
+	MIN(ir.NumberOfIncidents) OVER () AS LowestNumberOfIncidents,
+	MAX(ir.NumberOfIncidents) OVER () AS HighestNumberOfIncidents,
+	COUNT(ir.NumberOfIncidents) OVER () AS CountOfIncidents
+FROM dbo.IncidentRollup ir
+WHERE
+	ir.IncidentDate BETWEEN '2019-07-01' AND '2019-07-31'
+AND ir.IncidentTypeID = 3;
+
+SELECT
+	ir.IncidentDate,
+	ir.IncidentTypeID,
+	ir.NumberOfIncidents,
+    -- Get the total number of incidents
+	SUM(ir.NumberOfIncidents) OVER (
+      	-- Do this for each incident type ID
+		PARTITION BY ir.IncidentTypeID
+      	-- Sort by the incident date
+		ORDER BY ir.IncidentDate
+	) AS NumberOfIncidents
+FROM dbo.IncidentRollup ir
+	INNER JOIN dbo.Calendar c
+		ON ir.IncidentDate = c.Date
+WHERE
+	c.CalendarYear = 2019
+	AND c.CalendarMonth = 7
+	AND ir.IncidentTypeID IN (1, 2)
+ORDER BY
+	ir.IncidentTypeID,
+	ir.IncidentDate;
+
+--IncidentDate	IncidentTypeID	NumberOfIncidents	NumberOfIncidents
+--2019-07-01	1	2	2
+--2019-07-02	1	9	11
+--2019-07-03	1	3	14
+--2019-07-04	1	6	20
+--2019-07-06	1	7	27
+--2019-07-07	1	3	30
+--2019-07-08	1	3	33
+--2019-07-09	1	1	34
+--2019-07-11	1	9	43
+--2019-07-13	1	3	46
+--2019-07-15	1	8	54
+--2019-07-16	1	2	56
+--2019-07-18	1	3	59
+--2019-07-19	1	6	65
+--2019-07-20	1	2	67
+--2019-07-21	1	3	70
+--2019-07-22	1	2	72
+--2019-07-23	1	3	75
+--2019-07-24	1	1	76
+--2019-07-25	1	6	82
+--2019-07-26	1	6	88
+--2019-07-27	1	4	92
+--2019-07-29	1	3	95
+--2019-07-30	1	3	98
+--2019-07-31	1	6	104
+--2019-07-03	2	3	3
+--2019-07-08	2	8	11
+--2019-07-09	2	5	16
+--2019-07-11	2	5	21
+--2019-07-15	2	3	24
+--2019-07-16	2	7	31
+--2019-07-18	2	5	36
+--2019-07-20	2	3	39
+--2019-07-23	2	5	44
+--2019-07-24	2	9	53
+--2019-07-25	2	5	58
+--2019-07-26	2	4	62
+--2019-07-27	2	2	64
+--2019-07-30	2	2	66
+--2019-07-31	2	5	71
+
+-- Calculating Moving Averages
+SELECT
+	ir.IncidentDate,
+	ir.IncidentTypeID,
+	ir.NumberOfIncidents,
+    -- Fill in the correct window function
+	AVG(ir.NumberOfIncidents) OVER (
+		PARTITION BY ir.IncidentTypeID
+		ORDER BY ir.IncidentDate
+      	-- Fill in the three parts of the window frame
+		ROWS BETWEEN 6 PRECEDING AND CURRENT ROW
+	) AS MeanNumberOfIncidents
+FROM dbo.IncidentRollup ir
+	INNER JOIN dbo.Calendar c
+		ON ir.IncidentDate = c.Date
+WHERE
+	c.CalendarYear = 2019
+	AND c.CalendarMonth IN (7, 8)
+	AND ir.IncidentTypeID = 1
+ORDER BY
+	ir.IncidentTypeID,
+	ir.IncidentDate;
+
+
+-- LAG() and LEAD()
+SELECT
+	ir.IncidentDate,
+	ir.IncidentTypeID,
+    -- Get the prior day's number of incidents
+	LAG(ir.NumberOfIncidents, 1) OVER (
+      	-- Partition by incident type ID
+		PARTITION BY ir.IncidentTypeID
+      	-- Order by incident date
+		ORDER BY ir.IncidentDate
+	) AS PriorDayIncidents,
+	ir.NumberOfIncidents AS CurrentDayIncidents,
+    -- Get the next day's number of incidents
+	LEAD(ir.NumberOfIncidents, 1) OVER (
+      	-- Partition by incident type ID
+		PARTITION BY ir.IncidentTypeID
+      	-- Order by incident date
+		ORDER BY ir.IncidentDate
+	) AS NextDayIncidents
+FROM dbo.IncidentRollup ir
+WHERE
+	ir.IncidentDate >= '2019-07-02'
+	AND ir.IncidentDate <= '2019-07-31'
+	AND ir.IncidentTypeID IN (1, 2)
+ORDER BY
+	ir.IncidentTypeID,
+	ir.IncidentDate;
+
+SELECT
+	ir.IncidentDate,
+	ir.IncidentTypeID,
+    -- Fill in two periods ago
+	LAG(ir.NumberOfIncidents, 2) OVER (
+		PARTITION BY ir.IncidentTypeID
+		ORDER BY ir.IncidentDate
+	) AS Trailing2Day,
+    -- Fill in one period ago
+	LAG(ir.NumberOfIncidents, 1) OVER (
+		PARTITION BY ir.IncidentTypeID
+		ORDER BY ir.IncidentDate
+	) AS Trailing1Day,
+	ir.NumberOfIncidents AS CurrentDayIncidents,
+    -- Fill in next period
+	LEAD(ir.NumberOfIncidents, 1) OVER (
+		PARTITION BY ir.IncidentTypeID
+		ORDER BY ir.IncidentDate
+	) AS NextDay
+FROM dbo.IncidentRollup ir
+WHERE
+	ir.IncidentDate >= '2019-07-01'
+	AND ir.IncidentDate <= '2019-07-31'
+	AND ir.IncidentTypeID IN (1, 2)
+ORDER BY
+	ir.IncidentTypeID,
+	ir.IncidentDate;
+
+SELECT
+	ir.IncidentDate,
+	ir.IncidentTypeID,
+    -- Fill in the days since last incident
+	DATEDIFF(DAY, LAG(ir.IncidentDate, 1) OVER (
+		PARTITION BY ir.IncidentTypeID
+		ORDER BY ir.IncidentDate
+	), ir.IncidentDate) AS DaysSinceLastIncident,
+    -- Fill in the days until next incident
+	DATEDIFF(DAY, ir.IncidentDate, LEAD(ir.IncidentDate, 1) OVER (
+		PARTITION BY ir.IncidentTypeID
+		ORDER BY ir.IncidentDate
+	)) AS DaysUntilNextIncident
+FROM dbo.IncidentRollup ir
+WHERE
+	ir.IncidentDate >= '2019-07-02'
+	AND ir.IncidentDate <= '2019-07-31'
+	AND ir.IncidentTypeID IN (1, 2)
+ORDER BY
+	ir.IncidentTypeID,
+	ir.IncidentDate;
+
+-- Final Exercise
+-- This section focuses on entrances:  CustomerVisitStart
+SELECT
+	dsv.CustomerID,
+	dsv.CustomerVisitStart AS TimeUTC,
+	1 AS EntryCount,
+    -- We want to know each customer's entrance stream
+    -- Get a unique, ascending row number
+	ROW_NUMBER() OVER (
+      -- Break this out by customer ID
+      PARTITION BY dsv.CustomerID
+      -- Ordered by the customer visit start date
+      ORDER BY dsv.CustomerVisitStart
+    ) AS StartOrdinal
+FROM dbo.DaySpaVisit dsv
+UNION ALL
+-- This section focuses on departures:  CustomerVisitEnd
+SELECT
+	dsv.CustomerID,
+	dsv.CustomerVisitEnd AS TimeUTC,
+	-1 AS EntryCount,
+	NULL AS StartOrdinal
+FROM dbo.DaySpaVisit dsv;
+
+
+SELECT s.*,
+    -- Build a stream of all check-in and check-out events
+	ROW_NUMBER() OVER (
+      -- Break this out by customer ID
+      PARTITION BY s.CustomerID
+      -- Order by event time and then the start ordinal
+      -- value (in case of exact time matches)
+      ORDER BY s.TimeUTC, s.StartOrdinal
+    ) AS StartOrEndOrdinal
+FROM #StartStopPoints s;
+
+
+SELECT
+	s.CustomerID,
+	MAX(2 * s.StartOrdinal - s.StartOrEndOrdinal) AS MaxConcurrentCustomerVisits
+FROM #StartStopOrder s
+WHERE s.EntryCount = 1
+GROUP BY s.CustomerID
+-- The difference between 2 * start ordinal and the start/end
+-- ordinal represents the number of concurrent visits
+HAVING MAX(2 * s.StartOrdinal - s.StartOrEndOrdinal) > 2
+-- Sort by the largest number of max concurrent customer visits
+ORDER BY MaxConcurrentCustomerVisits DESC;
