@@ -451,3 +451,401 @@ SELECT
 
 
 -- LESSON 3
+-- Aggregating Time Series Data
+-- Fill in the appropriate aggregate functions
+SELECT
+	it.IncidentType,
+	COUNT(1) AS NumberOfRows,
+	SUM(ir.NumberOfIncidents) AS TotalNumberOfIncidents,
+	MIN(ir.NumberOfIncidents) AS MinNumberOfIncidents,
+	MAX(ir.NumberOfIncidents) AS MaxNumberOfIncidents,
+	MIN(ir.IncidentDate) As MinIncidentDate,
+	MAX(ir.IncidentDate) AS MaxIncidentDate
+FROM dbo.IncidentRollup ir
+	INNER JOIN dbo.IncidentType it
+		ON ir.IncidentTypeID = it.IncidentTypeID
+WHERE
+	ir.IncidentDate BETWEEN '2019-08-01' AND '2019-10-31'
+GROUP BY
+	it.IncidentType;
+
+-- Fill in the functions and columns
+SELECT
+	COUNT(DISTINCT ir.IncidentTypeID) AS NumberOfIncidentTypes,
+	COUNT(DISTINCT ir.IncidentDate) AS NumberOfDaysWithIncidents
+FROM dbo.IncidentRollup ir
+WHERE
+ir.IncidentDate BETWEEN '2019-08-01' AND '2019-10-31';
+
+SELECT
+	it.IncidentType,
+    -- Fill in the appropriate expression
+	SUM(CASE WHEN ir.NumberOfIncidents > 5 THEN 1 ELSE 0 END) AS NumberOfBigIncidentDays,
+    -- Number of incidents will always be at least 1, so
+    -- no need to check the minimum value, just that it's
+    -- less than or equal to 5
+    SUM(CASE WHEN ir.NumberOfIncidents <= 5 THEN 1 ELSE 0 END) AS NumberOfSmallIncidentDays
+FROM dbo.IncidentRollup ir
+	INNER JOIN dbo.IncidentType it
+		ON ir.IncidentTypeID = it.IncidentTypeID
+WHERE
+	ir.IncidentDate BETWEEN '2019-08-01' AND '2019-10-31'
+GROUP BY
+it.IncidentType;
+
+-- Fill in the missing function names
+SELECT
+	it.IncidentType,
+	AVG(ir.NumberOfIncidents) AS MeanNumberOfIncidents,
+	AVG(CAST(ir.NumberOfIncidents AS DECIMAL(4,2))) AS MeanNumberOfIncidents,
+	STDEV(ir.NumberOfIncidents) AS NumberOfIncidentsStandardDeviation,
+	VAR(ir.NumberOfIncidents) AS NumberOfIncidentsVariance,
+	COUNT(1) AS NumberOfRows
+FROM dbo.IncidentRollup ir
+	INNER JOIN dbo.IncidentType it
+		ON ir.IncidentTypeID = it.IncidentTypeID
+	INNER JOIN dbo.Calendar c
+		ON ir.IncidentDate = c.Date
+WHERE
+	c.CalendarQuarter = 2
+	AND c.CalendarYear = 2020
+GROUP BY
+it.IncidentType;
+
+
+SELECT DISTINCT
+	it.IncidentType,
+	AVG(CAST(ir.NumberOfIncidents AS DECIMAL(4,2)))
+	    OVER(PARTITION BY it.IncidentType) AS MeanNumberOfIncidents,
+    --- Fill in the missing value
+	PERCENTILE_CONT(0.5)
+    	-- Inside our group, order by number of incidents DESC
+    	WITHIN GROUP (ORDER BY ir.NumberOfIncidents DESC)
+        -- Do this for each IncidentType value
+        OVER (PARTITION BY it.IncidentType) AS MedianNumberOfIncidents,
+	COUNT(1) OVER (PARTITION BY it.IncidentType) AS NumberOfRows
+FROM dbo.IncidentRollup ir
+	INNER JOIN dbo.IncidentType it
+		ON ir.IncidentTypeID = it.IncidentTypeID
+	INNER JOIN dbo.Calendar c
+		ON ir.IncidentDate = c.Date
+WHERE
+	c.CalendarQuarter = 2
+	AND c.CalendarYear = 2020;
+
+-- Downsampling and Upsampling
+SELECT
+	-- Downsample to a daily grain
+    -- Cast CustomerVisitStart as a date
+	CAST(dsv.CustomerVisitStart AS DATE) AS Day,
+	SUM(dsv.AmenityUseInMinutes) AS AmenityUseInMinutes,
+	COUNT(1) AS NumberOfAttendees
+FROM dbo.DaySpaVisit dsv
+WHERE
+	dsv.CustomerVisitStart >= '2020-06-11'
+	AND dsv.CustomerVisitStart < '2020-06-23'
+GROUP BY
+	-- When we use aggregation functions like SUM or COUNT,
+    -- we need to GROUP BY the non-aggregated columns
+	CAST(dsv.CustomerVisitStart AS DATE)
+ORDER BY
+	Day;
+
+SELECT
+	-- Downsample to a weekly grain
+	DATEPART(WEEK, dsv.CustomerVisitStart) AS Week,
+	SUM(dsv.AmenityUseInMinutes) AS AmenityUseInMinutes,
+	-- Find the customer with the largest customer ID for that week
+	MAX(dsv.CustomerID) AS HighestCustomerID,
+	COUNT(1) AS NumberOfAttendees
+FROM dbo.DaySpaVisit dsv
+WHERE
+	dsv.CustomerVisitStart >= '2020-01-01'
+	AND dsv.CustomerVisitStart < '2021-01-01'
+GROUP BY
+	-- When we use aggregation functions like SUM or COUNT,
+    -- we need to GROUP BY the non-aggregated columns
+	DATEPART(WEEK, dsv.CustomerVisitStart)
+ORDER BY
+	Week;
+
+SELECT
+	-- Determine the week of the calendar year
+	c.CalendarWeekOfYear,
+	-- Determine the earliest DATE in this group
+	MIN(c.Date) AS FirstDateOfWeek,
+	ISNULL(SUM(dsv.AmenityUseInMinutes), 0) AS AmenityUseInMinutes,
+	ISNULL(MAX(dsv.CustomerID), 0) AS HighestCustomerID,
+	COUNT(dsv.CustomerID) AS NumberOfAttendees
+FROM dbo.Calendar c
+	LEFT OUTER JOIN dbo.DaySpaVisit dsv
+		-- Connect dbo.Calendar with dbo.DaySpaVisit
+		-- To join on CustomerVisitStart, we need to turn
+        -- it into a DATE type
+		ON c.Date = CAST(dsv.CustomerVisitStart AS DATE)
+WHERE
+	c.CalendarYear = 2020
+GROUP BY
+	-- When we use aggregation functions like SUM or COUNT,
+    -- we need to GROUP BY the non-aggregated columns
+	c.CalendarWeekOfYear
+ORDER BY
+	c.CalendarWeekOfYear;
+
+
+-- Grouping By ROLLUP, CUBE and GROUPING SETS
+SELECT
+	c.CalendarYear,
+	c.CalendarQuarterName,
+	c.CalendarMonth,
+    -- Include the sum of incidents by day over each range
+	SUM(ir.NumberOfIncidents) AS NumberOfIncidents
+FROM dbo.IncidentRollup ir
+	INNER JOIN dbo.Calendar c
+		ON ir.IncidentDate = c.Date
+WHERE
+	ir.IncidentTypeID = 2
+GROUP BY
+	-- GROUP BY needs to include all non-aggregated columns
+	c.CalendarYear,
+	c.CalendarQuarterName,
+	c.CalendarMonth
+-- Fill in your grouping operator
+WITH ROLLUP
+ORDER BY
+	c.CalendarYear,
+	c.CalendarQuarterName,
+	c.CalendarMonth;
+
+--CalendarYear	CalendarQuarterName	CalendarMonth	NumberOfIncidents
+--null	null	null	957
+--2019	null	null	482
+--2019	Q3	null	221
+--2019	Q3	7	71
+--2019	Q3	8	77
+--2019	Q3	9	73
+--2019	Q4	null	261
+--2019	Q4	10	66
+--2019	Q4	11	98
+--2019	Q4	12	97
+--2020	null	null	475
+--2020	Q1	null	211
+--2020	Q1	1	39
+--2020	Q1	2	66
+--2020	Q1	3	106
+--2020	Q2	null	264
+--2020	Q2	4	112
+--2020	Q2	5	74
+--2020	Q2	6	78
+
+
+SELECT
+	-- Use the ORDER BY clause as a guide for these columns
+    -- Don't forget that comma after the third column if you
+    -- copy from the ORDER BY clause!
+	ir.IncidentTypeID,
+	c.CalendarQuarterName,
+	c.WeekOfMonth,
+	SUM(ir.NumberOfIncidents) AS NumberOfIncidents
+FROM dbo.IncidentRollup ir
+	INNER JOIN dbo.Calendar c
+		ON ir.IncidentDate = c.Date
+WHERE
+	ir.IncidentTypeID IN (3, 4)
+GROUP BY
+	-- GROUP BY should include all non-aggregated columns
+	ir.IncidentTypeID,
+	c.CalendarQuarterName,
+	c.WeekOfMonth
+-- Fill in your grouping operator
+WITH CUBE
+ORDER BY
+	ir.IncidentTypeID,
+	c.CalendarQuarterName,
+	c.WeekOfMonth;
+
+--IncidentTypeID	CalendarQuarterName	WeekOfMonth	NumberOfIncidents
+--null	null	null	1241
+--null	null	1	218
+--null	null	2	295
+--null	null	3	258
+--null	null	4	303
+--null	null	5	167
+--null	Q1	null	264
+--null	Q1	1	26
+--null	Q1	2	75
+--null	Q1	3	64
+--null	Q1	4	52
+--null	Q1	5	47
+--null	Q2	null	275
+--null	Q2	1	39
+--null	Q2	2	58
+--null	Q2	3	70
+--null	Q2	4	66
+--null	Q2	5	42
+--null	Q3	null	368
+--null	Q3	1	79
+--null	Q3	2	97
+--null	Q3	3	62
+--null	Q3	4	87
+--null	Q3	5	43
+--null	Q4	null	334
+--null	Q4	1	74
+--null	Q4	2	65
+--null	Q4	3	62
+--null	Q4	4	98
+--null	Q4	5	35
+--3	null	null	757
+--3	null	1	117
+--3	null	2	179
+--3	null	3	176
+--3	null	4	197
+--3	null	5	88
+--3	Q1	null	143
+--3	Q1	1	18
+--3	Q1	2	40
+--3	Q1	3	36
+--3	Q1	4	26
+--3	Q1	5	23
+--3	Q2	null	177
+--3	Q2	1	23
+--3	Q2	2	40
+--3	Q2	3	46
+--3	Q2	4	50
+--3	Q2	5	18
+--3	Q3	null	234
+--3	Q3	1	38
+--3	Q3	2	62
+--3	Q3	3	46
+--3	Q3	4	60
+--3	Q3	5	28
+--3	Q4	null	203
+--3	Q4	1	38
+--3	Q4	2	37
+--3	Q4	3	48
+--3	Q4	4	61
+--3	Q4	5	19
+--4	null	null	484
+--4	null	1	101
+--4	null	2	116
+--4	null	3	82
+--4	null	4	106
+--4	null	5	79
+--4	Q1	null	121
+--4	Q1	1	8
+--4	Q1	2	35
+--4	Q1	3	28
+--4	Q1	4	26
+--4	Q1	5	24
+--4	Q2	null	98
+--4	Q2	1	16
+--4	Q2	2	18
+--4	Q2	3	24
+--4	Q2	4	16
+--4	Q2	5	24
+--4	Q3	null	134
+--4	Q3	1	41
+--4	Q3	2	35
+--4	Q3	3	16
+--4	Q3	4	27
+--4	Q3	5	15
+--4	Q4	null	131
+--4	Q4	1	36
+--4	Q4	2	28
+--4	Q4	3	14
+--4	Q4	4	37
+--4	Q4	5	16
+
+SELECT
+	c.CalendarYear,
+	c.CalendarQuarterName,
+	c.CalendarMonth,
+	SUM(ir.NumberOfIncidents) AS NumberOfIncidents
+FROM dbo.IncidentRollup ir
+	INNER JOIN dbo.Calendar c
+		ON ir.IncidentDate = c.Date
+WHERE
+	ir.IncidentTypeID = 2
+-- Fill in your grouping operator here
+GROUP BY GROUPING SETS
+(
+  	-- Group in hierarchical order:  calendar year,
+    -- calendar quarter name, calendar month
+	(c.CalendarYear, c.CalendarQuarterName, c.CalendarMonth),
+  	-- Group by calendar year
+	(c.CalendarYear),
+    -- This remains blank; it gives us the grand total
+	()
+)
+ORDER BY
+	c.CalendarYear,
+	c.CalendarQuarterName,
+	c.CalendarMonth;
+
+--CalendarYear	CalendarQuarterName	CalendarMonth	NumberOfIncidents
+--null	null	null	957
+--2019	null	null	482
+--2019	Q3	7	71
+--2019	Q3	8	77
+--2019	Q3	9	73
+--2019	Q4	10	66
+--2019	Q4	11	98
+--2019	Q4	12	97
+--2020	null	null	475
+--2020	Q1	1	39
+--2020	Q1	2	66
+--2020	Q1	3	106
+--2020	Q2	4	112
+--2020	Q2	5	74
+--2020	Q2	6	78
+
+SELECT
+	c.CalendarYear,
+	c.CalendarMonth,
+	c.DayOfWeek,
+	c.IsWeekend,
+	SUM(ir.NumberOfIncidents) AS NumberOfIncidents
+FROM dbo.IncidentRollup ir
+	INNER JOIN dbo.Calendar c
+		ON ir.IncidentDate = c.Date
+GROUP BY GROUPING SETS
+(
+    -- Each non-aggregated column from above should appear once
+  	-- Calendar year and month
+	(c.CalendarYear, c.CalendarMonth),
+  	-- Day of week
+	(c.DayOfWeek),
+  	-- Is weekend or not
+	(c.IsWeekend),
+    -- This remains empty; it gives us the grand total
+	()
+)
+ORDER BY
+	c.CalendarYear,
+	c.CalendarMonth,
+	c.DayOfWeek,
+	c.IsWeekend;
+
+--CalendarYear	CalendarMonth	DayOfWeek	IsWeekend	NumberOfIncidents
+--null	null	null	null	3756
+--null	null	null	false	2677
+--null	null	null	true	1079
+--null	null	1	null	536
+--null	null	2	null	535
+--null	null	3	null	539
+--null	null	4	null	522
+--null	null	5	null	586
+--null	null	6	null	495
+--null	null	7	null	543
+--2019	7	null	null	315
+--2019	8	null	null	331
+--2019	9	null	null	372
+--2019	10	null	null	319
+--2019	11	null	null	356
+--2019	12	null	null	311
+--2020	1	null	null	229
+--2020	2	null	null	310
+--2020	3	null	null	284
+--2020	4	null	null	312
+--2020	5	null	null	309
+--2020	6	null	null	308
