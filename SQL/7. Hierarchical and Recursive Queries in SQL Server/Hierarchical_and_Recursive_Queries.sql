@@ -288,3 +288,176 @@ WITH tree AS (
 -- Select the Name, Parent from tree
 SELECT Name, Parent
 FROM tree;
+
+-- LESSON 3
+-- Creating a table
+-- Define the table Person
+CREATE TABLE Person (
+  	-- Define the Individual ID
+  	IndividualID INT NOT NULL,
+  	-- Set Firstname and Lastname not to be NULL of type VARCHAR(255)
+	Firstname VARCHAR(255) NOT NULL,
+	Lastname VARCHAR(255) NOT NULL,
+	Address VARCHAR(255) NOT NULL,
+  	City CHAR(32) NOT NULL,
+   	-- Define Birthday as DATE
+  	Birthday DATE
+);
+
+SELECT *
+FROM Person;
+
+
+INSERT INTO Person
+VALUES ('1','Andrew','Anderson','Union Ave 10','New York','1986-12-30');
+INSERT INTO Person
+VALUES ('2','Peter','Jackson','342 Flushing st','New York','1986-12-30');
+
+-- Set the person's first name to Jones for ID = 1
+UPDATE Person
+SET Firstname = 'Jones'
+WHERE ID = 1;
+
+-- Update the birthday of the person with the last name Jackson
+UPDATE Person
+SET Birthday = '1980-01-05'
+WHERE Lastname = 'Jackson';
+
+SELECT *
+FROM Person;
+
+
+INSERT INTO Person
+VALUES ( '1', 'Andrew', 'Anderson', 'Address 1', 'City 1', '1986-12-30');
+INSERT INTO Person
+VALUES ( '2', 'Peter', 'Jackson', 'Address 2', 'City 2', '1986-12-30');
+INSERT INTO Person
+VALUES ( '3', 'Michaela', 'James', 'Address 3', 'City 3', '1976-03-07');
+
+DELETE FROM Person
+WHERE ID = 1;
+DELETE FROM Person
+WHERE Lastname = 'Jackson';
+
+-- Drop the table Person
+DROP TABLE Person
+
+SELECT *
+FROM Person;
+
+-- Add the column Email to Person
+ALTER TABLE Person
+ADD Email VARCHAR(255);
+
+-- Delete the column Birthday of Person
+ALTER TABLE Person
+DROP COLUMN Birthday;
+
+-- Check the table definition
+SELECT *
+FROM Person;
+
+CREATE TABLE Person (
+  	-- Define the primary key for Person of type INT
+  	PersonID INT NOT NULL PRIMARY KEY,
+	Firstname VARCHAR(255) NOT NULL,
+	Lastname VARCHAR(255) NOT NULL,
+);
+
+CREATE TABLE History (
+    -- Define the primary key for History
+  	OrderID INT NOT NULL PRIMARY KEY,
+    Item VARCHAR(255) NOT NULL,
+    Price INT NOT NULL,
+  	-- Define the foreign key for History
+    PersonID INT FOREIGN KEY REFERENCES Person(PersonID)
+);
+
+SELECT *
+FROM History;
+
+-- Insert new data into the table Person
+INSERT INTO Person
+VALUES ('1','Andrew','Anderson','Union Ave 10','New York','1986-12-30');
+INSERT INTO Person
+VALUES ('2', 'Sam', 'Smith','Flushing Ave 342','New York','1986-12-30');
+
+-- Insert new data into the table History
+INSERT INTO History
+VALUES ('1','IPhone XS', 1000,'1');
+INSERT INTO History
+VALUES ('2','MacBook Pro','1800', '2');
+
+SELECT *
+FROM History;
+
+INSERT INTO Person
+VALUES ('1', 'Andrew', 'Anderson','Union Ave 10','New York','1986-12-30');
+INSERT INTO Person
+VALUES ('2', 'Sam', 'Smith','Flushing Ave 342','New York','1986-12-30');
+
+INSERT INTO History VALUES ( '1', 'IPhone XS', '1000', '1');
+INSERT INTO History VALUES ( '2', 'MacBook Pro', '1800', '1');
+INSERT INTO History VALUES ( '5', 'IPhone XR', '600', '2');
+INSERT INTO History VALUES ( '6', 'IWatch 4', '400', '1');
+
+SELECT
+    Person.ID,
+    -- Count the number of orders
+    COUNT(*) as Orders,
+    -- Add the total price of all orders
+    SUM(Price) as Costs
+FROM Person
+	-- Join the tables Person and History on their IDs
+	JOIN History
+	ON Person.ID = History.PersonID
+-- Aggregate the information on the ID
+GROUP BY Person.ID;
+
+CREATE TABLE Equipment (
+    -- Define ID and ParentID
+	ID INT NOT NULL,
+    Equipment VARCHAR(255) NOT NULL,
+    ParentID INT
+);
+
+INSERT INTO Equipment VALUES ('1','Asset',NULL);
+INSERT INTO Equipment VALUES ('2','Hardware','1');
+-- Insert the type Software
+INSERT INTO Equipment VALUES ('3','Software','1');
+INSERT INTO Equipment VALUES ('4','Application','3');
+INSERT INTO Equipment VALUES ('5','Tool','3');
+INSERT INTO Equipment VALUES ('6','PC','2');
+-- Insert the type Monitor
+INSERT INTO Equipment VALUES ('7','Monitor','2');
+INSERT INTO Equipment VALUES ('8','Phone','2');
+INSERT INTO Equipment VALUES ('9','IPhone','8');
+-- Insert the type Microsoft Office
+INSERT INTO Equipment VALUES ('10','Microsoft Office','4');
+
+SELECT *
+FROM Equipment;
+
+CREATE TABLE Trip (
+    -- Define the Departure
+  	Departure VARCHAR(255) NOT NULL,
+    BusName VARCHAR(255) NOT NULL,
+    -- Define the Destination
+    Destination VARCHAR(255) NOT NULL,
+);
+
+-- Insert a route from San Francisco to New York
+INSERT INTO Trip VALUES ( 'San Francisco' , 'Bus 1' , 'New York');
+-- Insert a route from Florida to San Francisco
+INSERT INTO Trip VALUES ( 'Florida', 'Bus 9','San Francisco');
+INSERT INTO Trip VALUES ( 'San Francisco', 'Bus 2','Texas');
+INSERT INTO Trip VALUES ( 'San Francisco', 'Bus 3','Florida');
+INSERT INTO Trip VALUES ( 'San Francisco', 'Bus 4','Washington');
+INSERT INTO Trip VALUES ( 'New York', 'Bus 5','Texas');
+INSERT INTO Trip VALUES ( 'New York', 'Bus 6','Washington');
+INSERT INTO Trip VALUES ( 'Florida', 'Bus 7','New York');
+INSERT INTO Trip VALUES ( 'Florida', 'Bus 8','Toronto');
+
+-- Get all possible departure locations
+SELECT DISTINCT(Departure)
+FROM Trip;
