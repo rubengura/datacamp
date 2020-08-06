@@ -461,3 +461,196 @@ INSERT INTO Trip VALUES ( 'Florida', 'Bus 8','Toronto');
 -- Get all possible departure locations
 SELECT DISTINCT(Departure)
 FROM Trip;
+
+-- LESSON 4
+-- Practical example
+-- Definition of the CTE table
+WITH possible_Airports (Airports) AS(
+  	-- Select the departure airports
+  	SELECT Departure
+  	FROM flightPlan
+  	-- Combine the two queries
+  	UNION
+  	-- Select the destination airports
+  	SELECT Arrival
+  	FROM flightPlan)
+
+-- Get the airports from the CTE table
+SELECT Airports
+FROM possible_Airports;
+
+
+-- Define totalCost
+WITH flight_route (Departure, Arrival, stops, totalCost, route) AS(
+	SELECT
+	  	f.Departure, f.Arrival,
+	  	0,
+	  	-- Define the totalCost with the flight cost of the first flight
+	  	f.Cost as totalCost,
+	  	CAST(Departure + ' -> ' + Arrival AS NVARCHAR(MAX))
+	FROM flightPlan f
+	WHERE Departure = 'Vienna'
+	UNION ALL
+	SELECT
+	  	p.Departure, f.Arrival,
+	  	p.stops + 1,
+	  	-- Add the cost for each layover to the total costs
+	  	p.totalCost + f.Cost,
+	  	p.route + ' -> ' + f.Arrival
+	FROM flightPlan f, flight_route p
+	WHERE p.Arrival = f.Departure AND
+	      p.stops < 5)
+
+SELECT
+	DISTINCT Arrival,
+    totalCost
+FROM flight_route
+-- Limit the total costs to 500
+WHERE totalCost < 500;
+
+
+-- Car example
+CREATE TABLE Bill_Of_Material (
+	-- Define PartID as primary key of type INT
+  	PartID INT NOT NULL PRIMARY KEY,
+	SubPartID INT,
+	Component VARCHAR(255) NOT NULL,
+	Title  VARCHAR(255) NOT NULL,
+	Vendor VARCHAR(255) NOT NULL,
+  	ProductKey CHAR(32) NOT NULL,
+  	-- Define Cost of type INT and NOT NULL
+  	Cost INT NOT NULL,
+	Quantity INT NOT NULL);
+
+-- Insert the root element SUV as described
+INSERT INTO Bill_Of_Material
+VALUES ('1',NULL,'SUV','BMW X1','BMW','F48',50000,1);
+INSERT INTO Bill_Of_Material
+VALUES ('2','1','Engine','V6BiTurbro','BMW','EV3891ASF',3000,1);
+INSERT INTO Bill_Of_Material
+VALUES ('3','1','Body','AL_Race_Body','BMW','BD39281PUO',5000,1);
+INSERT INTO Bill_Of_Material
+VALUES ('4','1','Interior Decoration','All_Leather_Brown','BMW','ZEU198292',2500,1);
+-- Insert the entry Wheels as described
+INSERT INTO Bill_Of_Material
+VALUES ('5','1','Wheels','M-Performance 19/255','BMW','MKQ134098URZ',400,4);
+
+SELECT *
+FROM Bill_Of_Material;
+
+
+-- Define CTE with the fields: PartID, SubPartID, Title, Component, Level
+WITH construction_Plan (PartID, SubPartID, Title, Component, Level) AS (
+	SELECT
+  		PartID,
+  		SubPartID,
+  		Title,
+  		Component,
+  		-- Initialize the field Level
+  		1 AS Level
+	FROM partList
+	WHERE PartID = '1'
+	UNION ALL
+	SELECT
+		CHILD.PartID,
+  		CHILD.SubPartID,
+  		CHILD.Title,
+  		CHILD.Component,
+  		-- Increment the field Level each recursion step
+  		PARENT.Level + 1
+	FROM construction_Plan PARENT, partList CHILD
+  	WHERE CHILD.SubPartID = PARENT.PartID
+  	-- Limit the number of iterations to Level < 2
+	  AND PARENT.Level < 2)
+
+SELECT DISTINCT PartID, SubPartID, Title, Component, Level
+FROM construction_Plan
+ORDER BY PartID, SubPartID, Level;
+
+-- Define CTE with the fields: PartID, SubPartID, Level, Component, Total
+WITH construction_Plan (PartID, SubPartID, Level, Component, Total) AS (
+	SELECT
+  		PartID,SubPartID,
+  		0,
+  		Component,
+  		-- Initialize Total
+  		Quantity AS Total
+ 	FROM partList
+	WHERE PartID = '1'
+	UNION ALL
+	SELECT
+		CHILD.PartID, CHILD.SubPartID,
+  		PARENT.Level + 1,
+  		CHILD.Component,
+  		-- Increase Total by the quantity of the child element
+  		PARENT.Total + CHILD.Quantity
+	FROM construction_Plan PARENT, partList CHILD
+  	WHERE CHILD.SubPartID = PARENT.PartID
+	  AND PARENT.Level < 3)
+
+SELECT
+    PartID, SubPartID,Component,
+    -- Calculate the sum of total on the aggregated information
+    SUM(Total)
+FROM construction_Plan
+GROUP BY PartID, SubPartID, Component
+ORDER BY PartID, SubPartID;
+
+-- Power Grid
+-- Create the table
+CREATE TABLE structure (
+    -- Define the field EquipmentID
+  	EqupmentID INT NOT NULL PRIMARY KEY,
+    EquipmentID_To INT ,
+    EquipmentID_From INT,
+    VoltageLevel TEXT NOT NULL,
+    Description TEXT NOT NULL,
+    ConstructionYear INT NOT NULL,
+    InspectionYear INT NOT NULL,
+    ConditionAssessment TEXT NOT NULL
+);
+
+-- Insert the record for line 1 as described
+INSERT INTO structure
+VALUES ( 1, 2, NULL, 'HV', 'Cable', 2000, 2016, 'good');
+INSERT INTO Structure
+VALUES ( 2, 3 , 1, 'HV', 'Overhead Line', 1968, 2016, 'bad');
+INSERT INTO Structure
+VALUES ( 3, 14, 2, 'HV', 'TRANSFORMER', 1972, 2001, 'good');
+-- Insert the record for line 14 as described
+INSERT INTO Structure
+VALUES ( 14, 15, 3 , 'MV', 'Cable', 1976, 2002, 'bad');
+
+SELECT *
+FROM structure;
+
+-- Define the table CTE
+WITH maintenance_List (Line, Destination, Source, Description, ConditionAssessment, VoltageLevel) AS (
+	SELECT
+  		EquipmentID,
+  		EquipmentID_To,
+  		EquipmentID_From,
+  		Description,
+  		ConditionAssessment,
+  		VoltageLevel
+  	FROM GridStructure
+ 	-- Start the evaluation for line 3
+	WHERE EquipmentID = 3
+	UNION ALL
+	SELECT
+		Child.EquipmentID,
+  		Child.EquipmentID_To,
+  		Child.EquipmentID_FROM,
+  		Child.Description,
+  		Child.ConditionAssessment,
+  		Child.VoltageLevel
+	FROM GridStructure Child
+  		-- Join GridStructure with CTE on the corresponding endpoints
+  		JOIN maintenance_List
+    	ON maintenance_List.Line = Child.EquipmentID_FROM)
+SELECT Line, Description, ConditionAssessment
+FROM maintenance_List
+-- Filter the lines based on ConditionAssessment and VoltageLevel
+WHERE
+    (ConditionAssessment LIKE '%exchange%' OR ConditionAssessment LIKE '%repair%') AND
+     VoltageLevel LIKE '%HV%'
