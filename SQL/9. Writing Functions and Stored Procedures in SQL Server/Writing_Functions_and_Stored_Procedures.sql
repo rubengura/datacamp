@@ -100,7 +100,153 @@ FROM CapitalBikeShare
 SELECT *
 FROM @RideDates
 
-
 -- Find the first day of the current month
 SELECT DATEADD(MONTH, DATEDIFF(MONTH, 0, GETDATE()), 0)
 
+
+
+
+-- LESSON 2
+-- User Defined Functions
+-- Create GetYesterday()
+CREATE FUNCTION GetYesterday()
+-- Specify return data type
+RETURNS date
+AS
+BEGIN
+-- Calculate yesterday's date value
+RETURN(SELECT DATEADD(day, -1, GETDATE()))
+END
+
+-- Create SumRideHrsSingleDay
+CREATE FUNCTION SumRideHrsSingleDay (@DateParm date)
+-- Specify return data type
+RETURNS numeric
+AS
+-- Begin
+BEGIN
+RETURN
+-- Add the difference between StartDate and EndDate
+(SELECT SUM(DATEDIFF(second, StartDate, EndDate))/3600
+FROM CapitalBikeShare
+ -- Only include transactions where StartDate = @DateParm
+WHERE CAST(StartDate AS date) = @DateParm)
+-- End
+END
+
+-- Create the function
+CREATE FUNCTION SumRideHrsDateRange (@StartDateParm datetime, @EndDateParm datetime)
+-- Specify return data type
+RETURNS numeric
+AS
+BEGIN
+RETURN
+-- Sum the difference between StartDate and EndDate
+(SELECT SUM(DATEDIFF(second, StartDate, EndDate))/3600
+FROM CapitalBikeShare
+-- Include only the relevant transactions
+WHERE StartDate > @StartDateParm and StartDate < @EndDateParm)
+END
+
+
+-- Inline Table Valued Functions (ITVF)
+-- Create the function
+CREATE FUNCTION SumStationStats(@StartDate AS datetime)
+-- Specify return data type
+RETURNS TABLE
+AS
+RETURN
+SELECT
+	StartStation,
+    -- Use COUNT() to select RideCount
+	COUNT(ID) AS RideCount,
+    -- Use SUM() to calculate TotalDuration
+    SUM(DURATION) AS TotalDuration
+FROM CapitalBikeShare
+WHERE CAST(StartDate as Date) = @StartDate
+-- Group by StartStation
+GROUP BY StartStation;
+
+-- Multi-Statement Table Valued Functions (MSTVF)
+-- Create the function
+CREATE FUNCTION CountTripAvgDuration (@Month CHAR(2), @Year CHAR(4))
+-- Specify return variable
+RETURNS @DailyTripStats TABLE(
+	TripDate	date,
+	TripCount	int,
+	AvgDuration	numeric)
+AS
+BEGIN
+-- Insert query results into @DailyTripStats
+INSERT INTO @DailyTripStats
+SELECT
+    -- Cast StartDate as a date
+	CAST(StartDate AS date),
+    COUNT(ID),
+    AVG(Duration)
+FROM CapitalBikeShare
+WHERE
+	DATEPART(month, StartDate) = @Month AND
+    DATEPART(year, StartDate) = @Year
+-- Group by StartDate as a date
+GROUP BY CAST(StartDate AS date)
+-- Return
+RETURN
+END
+
+
+
+-- Using UDFs
+-- Create @BeginDate
+DECLARE @BeginDate AS date = '03/01/2018'
+-- Create @EndDate
+DECLARE @EndDate AS date = '3/10/2018'
+SELECT
+  -- Select @BeginDate
+  @BeginDate AS BeginDate,
+  -- Select @EndDate
+  @EndDate AS EndDate,
+  -- Execute SumRideHrsDateRange()
+  dbo.SumRideHrsDateRange(@BeginDate, @EndDate) AS TotalRideHrs
+
+
+  -- Create @RideHrs
+DECLARE @RideHrs AS numeric
+-- Execute SumRideHrsSingleDay function and store the result in @RideHrs
+EXEC @RideHrs = dbo.SumRideHrsSingleDay @DateParm = '3/5/2018'
+SELECT
+  'Total Ride Hours for 3/5/2018:',
+  @RideHrs
+
+-- Create @StationStats
+DECLARE @StationStats TABLE(
+	StartStation nvarchar(100),
+	RideCount int,
+	TotalDuration numeric)
+-- Populate @StationStats with the results of the function
+INSERT INTO @StationStats
+SELECT TOP 10 *
+-- Execute SumStationStats with 3/15/2018
+FROM dbo.SumStationStats('3/15/2018')
+ORDER BY RideCount DESC
+-- Select all the records from @StationStats
+SELECT *
+FROM @StationStats
+
+
+-- Maintaining UDFs
+-- Schema binding
+-- Update SumStationStats
+CREATE OR ALTER FUNCTION dbo.SumStationStats(@EndDate AS date)
+-- Enable SCHEMABINDING
+RETURNS TABLE WITH SCHEMABINDING
+AS
+RETURN
+SELECT
+	StartStation,
+    COUNT(ID) AS RideCount,
+    SUM(DURATION) AS TotalDuration
+FROM dbo.CapitalBikeShare
+-- Cast EndDate as date and compare to @EndDate
+WHERE CAST(EndDate AS Date) = @EndDate
+GROUP BY StartStation;
