@@ -429,3 +429,254 @@ SELECT
 	@ReturnCode AS ReturnCode,
     @ErrorOut AS ErrorMessage;
 
+-- LESSON 4
+-- Case Study
+SELECT
+	-- PickupDate is after today
+	COUNT (CASE WHEN PickupDate > GETDATE() THEN 1 END) AS 'FuturePickup',
+    -- DropOffDate is after today
+	COUNT (CASE WHEN DropOffDate > GETDATE() THEN 1 END) AS 'FutureDropOff',
+    -- PickupDate is after DropOffDate
+	COUNT (CASE WHEN PickupDate > DropOffDate THEN 1 END) AS 'PickupBeforeDropoff',
+    -- TripDistance is 0
+	COUNT (CASE WHEN TripDistance = 0 THEN 1 END) AS 'ZeroTripDistance'
+FROM YellowTripData;
+
+
+-- Create the stored procedure
+CREATE PROCEDURE dbo.cuspImputeTripDistanceMean
+AS
+BEGIN
+-- Specify @AvgTripDistance variable
+DECLARE @AvgTripDistance AS numeric (18,4)
+
+-- Calculate the average trip distance
+SELECT @AvgTripDistance = AVG(TripDistance)
+FROM YellowTripData
+-- Only include trip distances greater than 0
+WHERE TripDistance > 0
+
+-- Update the records where trip distance is 0
+UPDATE YellowTripData
+SET TripDistance =  @AvgTripDistance
+WHERE TripDistance = 0
+END;
+
+
+-- Create the function
+CREATE FUNCTION dbo.GetTripDistanceHotDeck()
+-- Specify return data type
+RETURNS numeric(18,4)
+AS
+BEGIN
+RETURN
+	-- Select the first TripDistance value
+	(SELECT TOP 1 TripDistance
+	FROM YellowTripData
+    -- Sample 1000 records
+	TABLESAMPLE(1000 rows)
+    -- Only include records where TripDistance is > 0
+	WHERE TripDistance > 0)
+END;
+
+
+-- Create the function
+CREATE FUNCTION dbo.ConvertMileToKm (@Miles numeric(18,2))
+-- Specify return data type
+RETURNS numeric(18,2)
+AS
+BEGIN
+RETURN
+	-- Convert Miles to Kilometers
+	(SELECT @Miles * 1.609)
+END;
+
+-- Create the function
+CREATE FUNCTION dbo.ConvertDollar
+	-- Specify @DollarAmt parameter
+	(@DollarAmt numeric(18,2),
+     -- Specify ExchangeRate parameter
+     @ExchangeRate numeric(18,2))
+-- Specify return data type
+RETURNS numeric(18,2)
+AS
+BEGIN
+RETURN
+	-- Multiply @ExchangeRate and @DollarAmt
+	(SELECT @ExchangeRate * @DollarAmt)
+END;
+
+-- Create the function
+CREATE FUNCTION dbo.GetShiftNumber (@Hour integer)
+-- Specify return data type
+RETURNS int
+AS
+BEGIN
+RETURN
+	-- 12am (0) to 9am (9) shift
+	(CASE WHEN @Hour >= 0 AND @Hour < 9 THEN 1
+     	  -- 9am (9) to 5pm (17) shift
+		 WHEN @Hour >= 9 AND @Hour < 17 THEN 2
+          -- 5pm (17) to 12am (24) shift
+	     WHEN @Hour >= 17 AND @Hour < 24 THEN 3 END)
+END;
+
+SELECT
+	-- Select the first 100 records of PickupDate
+	TOP 100 PickupDate,
+    -- Determine the shift value of PickupDate
+	dbo.GetShiftNumber(DATEPART(hour, PickupDate)) AS 'Shift',
+    -- Select FareAmount
+	FareAmount,
+    -- Convert FareAmount to Euro
+	dbo.ConvertDollar(FareAmount, 0.87) AS 'FareinEuro',
+    -- Select TripDistance
+	TripDistance,
+    -- Convert TripDistance to kilometers
+	dbo.ConvertMiletoKm(TripDistance) AS 'TripDistanceinKM'
+FROM YellowTripData
+-- Only include records for the 2nd shift
+WHERE dbo.GetShiftNumber(DATEPART(hour, PickupDate)) = 2;
+
+-- Formatting
+SELECT
+    -- Select the pickup day of week
+	DATENAME(weekday, PickupDate) as DayofWeek,
+    -- Calculate TotalAmount per TripDistance
+	CAST(AVG(TotalAmount/
+            -- Select TripDistance if it's more than 0
+			CASE WHEN TripDistance > 0 THEN TripDistance
+                 -- Use GetTripDistanceHotDeck()
+     			 ELSE dbo.GetTripDistanceHotDeck() END) as decimal(10,2)) as 'AvgFare'
+FROM YellowTripData
+GROUP BY DATENAME(weekday, PickupDate)
+-- Order by the PickupDate day of week
+ORDER BY
+     CASE WHEN DATENAME(weekday, PickupDate) = 'Monday' THEN 1
+         WHEN DATENAME(weekday, PickupDate) = 'Tuesday' THEN 2
+         WHEN DATENAME(weekday, PickupDate) = 'Wednesday' THEN 3
+         WHEN DATENAME(weekday, PickupDate) = 'Thursday' THEN 4
+         WHEN DATENAME(weekday, PickupDate) = 'Friday' THEN 5
+         WHEN DATENAME(weekday, PickupDate) = 'Saturday' THEN 6
+         WHEN DATENAME(weekday, PickupDate) = 'Sunday' THEN 7
+END ASC;
+
+SELECT
+    -- Cast PickupDate as a date and display as a German date
+	FORMAT(CAST(PickupDate AS date), 'd', 'de-de') AS 'PickupDate',
+	Zone.Borough,
+    -- Display TotalDistance in the German format
+	FORMAT(SUM(TripDistance), 'n', 'de-de') AS 'TotalDistance',
+    -- Display TotalRideTime in the German format
+	FORMAT(SUM(DATEDIFF(minute, PickupDate, DropoffDate)), 'n', 'de-de') AS 'TotalRideTime',
+    -- Display TotalFare in German currency
+	FORMAT(SUM(TotalAmount), 'c', 'de-de') AS 'TotalFare'
+FROM YellowTripData
+INNER JOIN TaxiZoneLookup AS Zone
+ON PULocationID = Zone.LocationID
+GROUP BY
+	CAST(PickupDate as date),
+    Zone.Borough
+ORDER BY
+	CAST(PickupDate as date),
+    Zone.Borough;
+
+-- Stored Procedures (SP)
+CREATE OR ALTER PROCEDURE dbo.cuspBoroughRideStats
+AS
+BEGIN
+SELECT
+    -- Calculate the pickup weekday
+	DATENAME(weekday, PickupDate) AS 'Weekday',
+    -- Select the Borough
+	Zone.Borough AS 'PickupBorough',
+    -- Display AvgFarePerKM as German currency
+	FORMAT(AVG(dbo.ConvertDollar(TotalAmount, .88)/dbo.ConvertMileToKM(TripDistance)), 'c', 'de-de') AS 'AvgFarePerKM',
+    -- Display RideCount in the German format
+	FORMAT(COUNT(ID), 'n', 'de-de') AS 'RideCount',
+    -- Display TotalRideMin in the German format
+	FORMAT(SUM(DATEDIFF(SECOND, PickupDate, DropOffDate))/60, 'n', 'de-de') AS 'TotalRideMin'
+FROM YellowTripData
+INNER JOIN TaxiZoneLookup AS Zone
+ON PULocationID = Zone.LocationID
+-- Only include records where TripDistance is greater than 0
+WHERE TripDistance > 0
+-- Group by pickup weekday and Borough
+GROUP BY DATENAME(WEEKDAY, PickupDate), Zone.Borough
+ORDER BY CASE WHEN DATENAME(WEEKDAY, PickupDate) = 'Monday' THEN 1
+	     	  WHEN DATENAME(WEEKDAY, PickupDate) = 'Tuesday' THEN 2
+              WHEN DATENAME(WEEKDAY, PickupDate) = 'Wednesday' THEN 3
+              WHEN DATENAME(WEEKDAY, PickupDate) = 'Thursday' THEN 4
+              WHEN DATENAME(WEEKDAY, PickupDate) = 'Friday' THEN 5
+              WHEN DATENAME(WEEKDAY, PickupDate) = 'Saturday' THEN 6
+              WHEN DATENAME(WEEKDAY, PickupDate) = 'Sunday' THEN 7 END,
+		 SUM(DATEDIFF(SECOND, PickupDate, DropOffDate))/60
+DESC
+END;
+
+
+-- Create SPResults
+DECLARE @SPResults TABLE(
+  	-- Create Weekday
+	Weekday nvarchar(30),
+    -- Create Borough
+	Borough nvarchar(30),
+    -- Create AvgFarePerKM
+	AvgFarePerKM nvarchar(30),
+    -- Create RideCount
+	RideCount	nvarchar(30),
+    -- Create TotalRideMin
+	TotalRideMin nvarchar(30))
+
+-- Insert the results into @SPResults
+INSERT INTO @SPResults
+-- Execute the SP
+EXEC dbo.cuspBoroughRideStats
+
+-- Select all the records from @SPresults
+SELECT *
+FROM @SPResults;
+
+-- Create the stored procedure
+CREATE PROCEDURE dbo.cuspPickupZoneShiftStats
+	-- Specify @Borough parameter
+	@Borough nvarchar(30)
+AS
+BEGIN
+SELECT
+	DATENAME(WEEKDAY, PickupDate) as 'Weekday',
+    -- Calculate the shift number
+	dbo.GetShiftNumber(DATEPART(hour, PickupDate)) as 'Shift',
+	Zone.Zone as 'Zone',
+	FORMAT(AVG(dbo.ConvertDollar(TotalAmount, .77)/dbo.ConvertMiletoKM(TripDistance)), 'c', 'de-de') AS 'AvgFarePerKM',
+	FORMAT(COUNT (ID),'n', 'de-de') as 'RideCount',
+	FORMAT(SUM(DATEDIFF(SECOND, PickupDate, DropOffDate))/60, 'n', 'de-de') as 'TotalRideMin'
+FROM YellowTripData
+INNER JOIN TaxiZoneLookup as Zone on PULocationID = Zone.LocationID
+WHERE
+	dbo.ConvertMiletoKM(TripDistance) > 0 AND
+	Zone.Borough = @Borough
+GROUP BY
+	DATENAME(WEEKDAY, PickupDate),
+    -- Group by shift
+	dbo.GetShiftNumber(DATEPART(hour, PickupDate)),
+	Zone.Zone
+ORDER BY CASE WHEN DATENAME(WEEKDAY, PickupDate) = 'Monday' THEN 1
+              WHEN DATENAME(WEEKDAY, PickupDate) = 'Tuesday' THEN 2
+              WHEN DATENAME(WEEKDAY, PickupDate) = 'Wednesday' THEN 3
+              WHEN DATENAME(WEEKDAY, PickupDate) = 'Thursday' THEN 4
+              WHEN DATENAME(WEEKDAY, PickupDate) = 'Friday' THEN 5
+              WHEN DATENAME(WEEKDAY, PickupDate) = 'Saturday' THEN 6
+              WHEN DATENAME(WEEKDAY, PickupDate) = 'Sunday' THEN 7 END,
+         -- Order by shift
+         dbo.GetShiftNumber(DATEPART(hour, PickupDate)),
+         SUM(DATEDIFF(SECOND, PickupDate, DropOffDate))/60 DESC
+END;
+
+
+-- Create @Borough
+DECLARE @Borough AS nvarchar(30) = 'Manhattan'
+-- Execute the SP
+EXEC dbo.cuspPickupZoneShiftStats
+    -- Pass @Borough
+	@Borough = @Borough;
