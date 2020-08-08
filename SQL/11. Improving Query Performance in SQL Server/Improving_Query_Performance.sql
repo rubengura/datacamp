@@ -237,3 +237,171 @@ UNION ALL -- Append queries
 SELECT Capital AS NearCityName,
        Code2 AS CountryCode  -- Country code column
 FROM Nations;
+
+-- LESSON 3
+-- Sub-queries
+-- Uncorrelated sub-query
+-- In uncorrelated sub-queries, the sub-query does not reference the
+-- outer query and therefore can run independently of the outer query.
+SELECT UNStatisticalRegion,
+       CountryName
+FROM Nations
+WHERE Code2 -- Country code for outer query
+         IN (SELECT Country -- Country code for sub-query
+             FROM Earthquakes
+             WHERE depth >= 400 ) -- Depth filter
+ORDER BY UNStatisticalRegion;
+
+-- Correlated sub-query
+-- In correlated sub-queries, the outer query is referenced in the sub-query.
+SELECT UNContinentRegion,
+       CountryName,
+        (SELECT AVG(magnitude) -- Add average magnitude
+        FROM Earthquakes e
+         	  -- Add country code reference
+        WHERE n.Code2 = e.Country) AS AverageMagnitude
+FROM Nations n
+ORDER BY UNContinentRegion DESC,
+         AverageMagnitude DESC;
+
+-- Subquery vs INNER JOIN
+SELECT
+	n.CountryName,
+	 (SELECT MAX(c.Pop2017) -- Add 2017 population column
+	 FROM Cities AS c
+                       -- Outer query country code column
+	 WHERE c.CountryCode = n.Code2) AS BiggestCity
+FROM Nations AS n; -- Outer query table
+
+SELECT n.CountryName,
+       c.BiggestCity
+FROM Nations AS n
+INNER JOIN -- Join the Nations table and sub-query
+    (SELECT CountryCode,
+     MAX(Pop2017) AS BiggestCity
+     FROM Cities
+     GROUP BY CountryCode) AS c
+ON n.Code2 = c.CountryCode; -- Add the joining columns
+
+-- Sub-queries and INNER JOIN's can be used to return the same results. However,
+-- in practice large, complex queries  may contain lots of sub-queries, many of
+-- which could be re-written as INNER JOIN's to improve performance
+
+
+-- Presence and absence
+-- INTERSECT: Appears on both tables
+SELECT Capital
+FROM Nations -- Table with capital cities
+
+INTERSECT -- Add the operator to compare the two queries
+
+SELECT NearestPop -- Add the city name column
+FROM Earthquakes;
+
+-- EXCEPT: Get all CountryCodes from Nations that are not in Earthquakes table
+SELECT Code2 -- Add the country code column
+FROM Nations
+
+EXCEPT -- Add the operator to compare the two queries
+
+SELECT Country
+FROM Earthquakes; -- Table with country codes
+
+
+SELECT CountryName
+FROM Nations -- Table from Earthquakes database
+
+INTERSECT -- Operator for the intersect between tables
+
+SELECT Country
+FROM Players; -- Table from NBA Season 2017-2018 database
+
+
+-- Alternative methods
+-- IN vs EXISTS
+-- First attempt
+SELECT CountryName,
+       Pop2017, -- 2017 country population
+	   Capital, -- Capital city
+       WorldBankRegion
+FROM Nations
+WHERE Capital IN -- Add the operator to compare queries
+        (SELECT NearestPop
+	     FROM Earthquakes);
+
+-- Second attempt
+SELECT CountryName,
+	   Capital,
+       Pop2016, -- 2016 country population
+       WorldBankRegion
+FROM Nations AS n
+WHERE EXISTS -- Add the operator to compare queries
+	  (SELECT 1
+	   FROM Earthquakes AS e
+	   WHERE n.Capital = e.NearestPop); -- Columns being compared
+
+-- NOT IN vs NOT EXISTS
+SELECT WorldBankRegion,
+       CountryName
+FROM Nations
+WHERE Code2 NOT EXISTS -- Add the operator to compare queries
+	(SELECT CountryCode -- Country code column
+	 FROM Cities);
+
+-- NOT IN with IS NOT NULL
+SELECT WorldBankRegion,
+       CountryName,
+       Capital -- Capital city name column
+FROM Nations
+WHERE Capital NOT IN
+	(SELECT NearestPop -- City name column
+     FROM Earthquakes);
+-- Returns nothing
+
+SELECT WorldBankRegion,
+       CountryName,
+       Capital
+FROM Nations
+WHERE Capital NOT IN
+	(SELECT NearestPop
+     FROM Earthquakes
+     WHERE NearestPop IS NOT NULL); -- filter condition
+-- Returns rows
+
+
+-- Alternative 2
+-- Initial query
+SELECT TeamName,
+       TeamCode,
+	   City
+FROM Teams AS t -- Add table
+WHERE EXISTS -- Operator to compare queries
+      (SELECT 1
+	  FROM Earthquakes AS e -- Add table
+	  WHERE t.City = e.NearestPop);
+
+-- Second query
+SELECT t.TeamName,
+       t.TeamCode,
+	   t.City,
+	   e.Date,
+	   e.Place, -- Place description
+	   e.Country -- Country code
+FROM Teams AS t
+INNER JOIN Earthquakes AS e -- Operator to compare tables
+	  ON t.City = e.NearestPop
+
+
+-- LEFT OUTER JOIN example
+-- Second attempt
+SELECT c.CustomerID,
+       c.CompanyName,
+	   c.ContactName,
+	   c.ContactTitle,
+	   c.Phone
+FROM Customers c
+LEFT OUTER JOIN Orders o
+	ON c.CustomerID = o.CustomerID
+WHERE c.Country = 'France'
+	AND o.CustomerID IS NULL; -- Filter condition
+
