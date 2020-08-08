@@ -117,3 +117,123 @@ INNER JOIN Earthquakes AS e
 	ON n.Code2 = e.Country
 WHERE e.Magnitude >= 9
 ORDER BY e.Magnitude DESC;
+
+-- Filtering with WHERE
+-- First query
+
+SELECT PlayerName,
+    Team,
+    Position,
+    (DRebound+ORebound)/CAST(GamesPlayed AS numeric) AS AvgRebounds
+FROM PlayerStats
+WHERE (DRebound+ORebound)/CAST(GamesPlayed AS numeric) >= 12;
+
+-- Second query
+
+-- Add the new column to the select statement
+SELECT PlayerName,
+       Team,
+       Position,
+       AvgRebounds -- Add the new column
+FROM
+     -- Sub-query starts here
+	(SELECT
+      PlayerName,
+      Team,
+      Position,
+      -- Calculate average total rebounds
+     (DRebound+ORebound)/CAST(GamesPlayed AS numeric) AS AvgRebounds
+	 FROM PlayerStats) tr
+WHERE AvgRebounds >= 12; -- Filter rows
+
+SELECT PlayerName,
+      Country,
+      College,
+      DraftYear,
+      DraftNumber
+FROM Players
+WHERE College LIKE 'Louisiana%';
+                   -- Add the new wildcard filter
+
+-- Filtering with HAVING
+SELECT Country, COUNT(*) CountOfPlayers
+FROM Players
+-- Add the filter condition
+WHERE COUNTRY
+-- Fill in the missing countries
+	IN ('Argentina','Brazil','Dominican Republic'
+        ,'Puerto Rico')
+GROUP BY Country;
+
+
+SELECT Team,
+	SUM(TotalPoints) AS TotalPFPoints
+FROM PlayerStats
+-- Filter for only rows with power forwards
+WHERE Position = 'PF'
+GROUP BY Team
+-- Filter for total points greater than 3000
+HAVING SUM(TotalPoints) > 3000;
+
+
+SELECT latitude, -- Y location coordinate column
+       longitude, -- X location coordinate column
+	   magnitude , -- Earthquake strength column
+	   depth, -- Earthquake depth column
+	   NearestPop -- Nearest city column
+FROM Earthquakes
+WHERE Country = 'PG' -- Papua New Guinea country code
+	OR Country = 'ID'; -- Indonesia country code
+
+SELECT TOP 25 PERCENT -- Limit rows to the upper quartile
+       Latitude,
+       Longitude,
+	   Magnitude,
+	   Depth,
+	   NearestPop
+FROM Earthquakes
+WHERE Country = 'PG'
+	OR Country = 'ID'
+ORDER BY Magnitude DESC; -- Order the results
+
+
+SELECT NearestPop,
+       Country,
+       SUM(NearestPop) NumEarthquakes -- Number of cities
+FROM Earthquakes
+WHERE Magnitude >= 8
+	AND Country IS NOT NULL
+GROUP BY NearestPop, Country -- Group columns
+ORDER BY NumEarthquakes DESC;
+
+SELECT NearestPop,
+       Country,
+       SUM(NearestPop) NumEarthquakes -- Number of cities
+FROM Earthquakes
+WHERE Magnitude >= 8
+	AND Country IS NOT NULL
+GROUP BY NearestPop, Country -- Group columns
+ORDER BY NumEarthquakes DESC;
+
+
+
+SELECT CityName AS NearCityName, -- City name column
+	   CountryCode
+FROM Cities
+
+UNION -- Append queries
+
+SELECT Capital AS NearCityName, -- Nation capital column
+       Code2 AS CountryCode
+FROM Nations;
+
+
+SELECT CityName AS NearCityName,
+	   CountryCode
+FROM Cities
+
+UNION ALL -- Append queries
+
+SELECT Capital AS NearCityName,
+       Code2 AS CountryCode  -- Country code column
+FROM Nations;
