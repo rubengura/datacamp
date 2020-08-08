@@ -76,3 +76,248 @@ SELECT * FROM SalesWithoutPrice;
 --28	Tasty Fruits	Blackcurrant	1100	2020-08-08	2750.00	USD
 --29	Health Mag	Kiwi	100	2020-08-08	140.00	USD
 --30	eShop	Plum	500	2020-08-08	600.00	USD
+
+-- LESSON 2
+-- Classification of Triggers
+-- Create the trigger
+CREATE TRIGGER TrackRetiredProducts
+ON Products
+AFTER DELETE
+AS
+	INSERT INTO RetiredProducts (Product, Measure)
+	SELECT Product, Measure
+	FROM deleted;
+
+-- Remove the products that will be retired
+DELETE FROM Products
+WHERE Product IN ('Cloudberry', 'Guava', 'Nance', 'Yuzu');
+
+-- Verify the output of the history table
+SELECT * FROM RetiredProducts;
+
+
+-- Practicing AFTER triggers
+-- Create a new trigger for canceled orders
+CREATE TRIGGER KeepCanceledOrders
+ON Orders
+AFTER DELETE
+AS
+	INSERT INTO CanceledOrders
+	SELECT * FROM deleted;
+
+-- Create a new trigger to keep track of discounts
+CREATE TRIGGER CustomerDiscountHistory
+ON Discounts
+AFTER DELETE
+AS
+	-- Store old and new values into the `DiscountsHistory` table
+	INSERT INTO DiscountsHistory (Customer, OldDiscount, NewDiscount, ChangeDate)
+	SELECT i.Customer, d.Discount, i.Discount, GETDATE()
+	FROM inserted AS i
+	INNER JOIN deleted AS d ON i.Customer = d.Customer;
+
+-- Notify the Sales team of new orders
+CREATE TRIGGER SendEmailtoSales
+ON Orders
+AFTER INSERT
+AS
+	EXECUTE SendEmailtoSales;
+
+
+-- INSTEAD OF
+-- Create the trigger
+CREATE TRIGGER PreventOrdersUpdate
+ON Orders
+INSTEAD OF UPDATE
+AS
+	RAISERROR ('Updates on "Orders" table are not permitted.
+                Place a new order to add new products.', 16, 1);
+
+
+-- Create a new trigger
+CREATE TRIGGER PreventNewDiscounts
+ON Discounts
+INSTEAD OF INSERT
+AS
+	RAISERROR ('You are not allowed to add discounts for existing customers.
+                Contact the Sales Manager for more details.', 16, 1);
+
+
+-- Create the trigger to log table info
+CREATE TRIGGER TrackTableChanges
+ON DATABASE
+FOR CREATE_TABLE,
+	ALTER_TABLE,
+	DROP_TABLE
+AS
+	INSERT INTO TablesChangeLog (EventData, ChangedBy)
+    VALUES (EVENTDATA(), USER);
+
+-- Add a trigger to disable the removal of tables
+CREATE TRIGGER PreventTableDeletion
+ON DATABASE
+FOR DROP_TABLE
+AS
+	RAISERROR ('You are not allowed to remove tables from this database.', 16, 1);
+    -- Revert the statement that removes the table
+    ROLLBACK;
+
+-- LOGON
+-- Save user details in the audit table
+INSERT INTO ServerLogonLog (LoginName, LoginDate, SessionID, SourceIPAddress)
+SELECT ORIGINAL_LOGIN(), GETDATE(), @@SPID, client_net_address
+-- The user details can be found in SYS.DM_EXEC_CONNECTIONS
+FROM SYS.DM_EXEC_CONNECTIONS WHERE session_id = @@SPID;
+
+-- Create a trigger firing when users log on to the server
+CREATE TRIGGER LogonAudit
+-- Use ALL SERVER to create a server-level trigger
+ON ALL SERVER WITH EXECUTE AS 'sa'
+-- The trigger should fire after a logon
+AFTER LOGON
+AS
+	-- Save user details in the audit table
+	INSERT INTO ServerLogonLog (LoginName, LoginDate, SessionID, SourceIPAddress)
+	SELECT ORIGINAL_LOGIN(), GETDATE(), @@SPID, client_net_address
+	FROM SYS.DM_EXEC_CONNECTIONS WHERE session_id = @@SPID;
+
+
+-- LESSON 3
+-- Limitation of Triggers
+-- Get the column that contains the trigger name
+SELECT name AS TriggerName,
+	   parent_class_desc AS TriggerType,
+	   create_date AS CreateDate,
+	   modify_date AS LastModifiedDate,
+	   is_disabled AS Disabled,
+       -- Get the column that tells if it's an INSTEAD OF trigger
+	   is_instead_of_trigger AS InsteadOfTrigger
+FROM sys.triggers;
+
+-- Gather information about database triggers
+SELECT name AS TriggerName,
+	   parent_class_desc AS TriggerType,
+	   create_date AS CreateDate,
+	   modify_date AS LastModifiedDate,
+	   is_disabled AS Disabled,
+	   is_instead_of_trigger AS InsteadOfTrigger
+FROM sys.triggers
+UNION ALL
+SELECT name AS TriggerName,
+	   -- Get the column that contains the trigger type
+	   parent_class_desc AS TriggerType,
+	   create_date AS CreateDate,
+	   modify_date AS LastModifiedDate,
+	   is_disabled AS Disabled,
+	   0 AS InsteadOfTrigger
+-- Gather information about server triggers
+FROM sys.server_triggers
+-- Order the results by the trigger name
+ORDER BY name;
+
+-- Gather information about database triggers
+SELECT name AS TriggerName,
+	   parent_class_desc AS TriggerType,
+	   create_date AS CreateDate,
+	   modify_date AS LastModifiedDate,
+	   is_disabled AS Disabled,
+	   is_instead_of_trigger AS InsteadOfTrigger,
+       -- Get the trigger definition by using a function
+	   OBJECT_DEFINITION (object_id)
+FROM sys.triggers
+UNION ALL
+-- Gather information about server triggers
+SELECT name AS TriggerName,
+	   parent_class_desc AS TriggerType,
+	   create_date AS CreateDate,
+	   modify_date AS LastModifiedDate,
+	   is_disabled AS Disabled,
+	   0 AS InsteadOfTrigger,
+       -- Get the trigger definition by using a function
+	   OBJECT_DEFINITION (object_id)
+FROM sys.server_triggers
+ORDER BY TriggerName;
+
+-- Use cases of AFTER triggers
+-- Create a trigger to keep row history
+CREATE TRIGGER CopyCustomersHistory
+ON Customers
+-- Fire the trigger for new and updated rows
+AFTER INSERT, UPDATE
+AS
+	INSERT INTO CustomersHistory (CustomerID, Customer, ContractID, ContractDate, Address, PhoneNo, Email, ChangeDate)
+	SELECT CustomerID, Customer, ContractID, ContractDate, Address, PhoneNo, Email, GETDATE()
+    -- Get info from the special table that keeps new rows
+    FROM inserted;
+
+-- Add a trigger that tracks table changes
+CREATE TRIGGER OrdersAudit
+ON Orders
+AFTER INSERT, UPDATE, DELETE
+AS
+	DECLARE @Insert BIT = 0;
+	DECLARE @Delete BIT = 0;
+	IF EXISTS (SELECT * FROM inserted) SET @Insert = 1;
+	IF EXISTS (SELECT * FROM deleted) SET @Delete = 1;
+	INSERT INTO TablesAudit (TableName, EventType, UserAccount, EventDate)
+	SELECT 'Orders' AS TableName
+	       ,CASE WHEN @Insert = 1 AND @Delete = 0 THEN 'INSERT'
+				 WHEN @Insert = 1 AND @Delete = 1 THEN 'UPDATE'
+				 WHEN @Insert = 0 AND @Delete = 1 THEN 'DELETE'
+				 END AS Event
+		   ,ORIGINAL_LOGIN() AS UserAccount
+		   ,GETDATE() AS EventDate;
+
+-- Use cases of INSTEAD OF
+-- Prevent any product changes
+CREATE TRIGGER PreventProductChanges
+ON Products
+INSTEAD OF UPDATE
+AS
+	RAISERROR ('Updates of products are not permitted. Contact the database administrator if a change is needed.', 16, 1);
+
+-- Create a new trigger to confirm stock before ordering
+CREATE TRIGGER ConfirmStock
+ON Orders
+INSTEAD OF INSERT
+AS
+	IF EXISTS (SELECT *
+			   FROM Products AS p
+			   INNER JOIN inserted AS i ON i.Product = p.Product
+			   WHERE p.Quantity < i.Quantity)
+	BEGIN
+		RAISERROR ('You cannot place orders when there is no stock for the order''s product.', 16, 1);
+	END
+	ELSE
+	BEGIN
+		INSERT INTO Orders (OrderID, Customer, Product, Price, Currency, Quantity, WithDiscount, Discount, OrderDate, TotalAmount, Dispatched)
+		SELECT OrderID, Customer, Product, Price, Currency, Quantity, WithDiscount, Discount, OrderDate, TotalAmount, Dispatched FROM ___;
+	END;
+
+
+-- Use cases for DDL Triggers
+-- Create a new trigger
+CREATE TRIGGER DatabaseAudit
+-- Attach the trigger at the database level
+ON DATABASE
+-- Fire the trigger for all tables/ views events
+FOR DDL_TABLE_VIEW_EVENTS
+AS
+	INSERT INTO DatabaseAudit (EventType, DatabaseName, SchemaName, Object, ObjectType, UserAccount, Query, EventTime)
+	SELECT EVENTDATA().value('(/EVENT_INSTANCE/EventType)[1]', 'NVARCHAR(50)') AS EventType
+		  ,EVENTDATA().value('(/EVENT_INSTANCE/DatabaseName)[1]', 'NVARCHAR(50)') AS DatabaseName
+		  ,EVENTDATA().value('(/EVENT_INSTANCE/SchemaName)[1]', 'NVARCHAR(50)') AS SchemaName
+		  ,EVENTDATA().value('(/EVENT_INSTANCE/ObjectName)[1]', 'NVARCHAR(100)') AS Object
+		  ,EVENTDATA().value('(/EVENT_INSTANCE/ObjectType)[1]', 'NVARCHAR(50)') AS ObjectType
+		  ,EVENTDATA().value('(/EVENT_INSTANCE/LoginName)[1]', 'NVARCHAR(100)') AS UserAccount
+		  ,EVENTDATA().value('(/EVENT_INSTANCE/TSQLCommand/CommandText)[1]', 'NVARCHAR(MAX)') AS Query
+		  ,EVENTDATA().value('(/EVENT_INSTANCE/PostTime)[1]', 'DATETIME') AS EventTime;
+
+-- Create a trigger to prevent database deletion
+CREATE TRIGGER PreventDatabaseDelete
+-- Attach the trigger at the server level
+ON ALL SERVER
+FOR DROP_DATABASE
+AS
+   PRINT 'You are not allowed to remove existing databases.';
+   ROLLBACK;
