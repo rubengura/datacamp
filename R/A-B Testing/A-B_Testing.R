@@ -6,10 +6,12 @@
 # LESSON 1
 # Load tidyverse
 library(tidyverse)
+library(lubridate)
+library(scales)
 library(powerMediation)
 
 # Read in data
-click_data <- read_csv("click_data.csv")
+click_data <- read_csv("C:/Users/ruben/PycharmProjects/datacamp/R/A-B Testing/click_data.csv")
 click_data
 
 # Find oldest and most recent date
@@ -37,7 +39,9 @@ ggplot(click_data_sum, aes(x = `week(visit_date)`,
   geom_point() +
   geom_line() +
   scale_y_continuous(limits = c(0, 1),
-                     labels = percent)
+                     labels = percent) +
+  labs(x = "Week",
+       y = "Conversion Rate")
 
 # Compute and look at sample size for experiment in August
 total_sample_size <- SSizeLogisticBin(p1 = 0.54,
