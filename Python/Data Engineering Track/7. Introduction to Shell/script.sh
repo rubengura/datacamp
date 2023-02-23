@@ -1,3 +1,12 @@
+# Printing current directory
+pwd # Returns datacamp/Python/Data Engineering Track/7. Introduction to Shell
+
+# List the contents (files and folders) inside the specified route. If no path is specified
+# it will browse the current directory list of contents
+ls # Returns notes.md       script.sh      seasonal
+
+# Command ls can be used with an absolute or relative path as well
+
 # LESSON 1
 # Manipulating files and directories
 # Copying files
